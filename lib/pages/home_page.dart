@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
 import 'package:todo_app/components/dialog_box.dart';
 import 'package:todo_app/components/todo_title.dart';
-import 'package:todo_app/data/database.dart';
+import 'package:todo_app/cubit/todo_cubit.dart';
+// import 'package:todo_app/data/database.dart';
 import 'package:todo_app/data/model/todo_model.dart';
 
 class HomePage extends StatefulWidget {
@@ -15,34 +17,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<TodoModel> todoList = [];
-  late final Box<TodoModel> _myBox;
-  var todoDataBase = TodoDatabase();
   final _controller = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _myBox = widget.todoBox ??
-        Hive.box<TodoModel>('todobox'); // Use default box if not provided
-    if (_myBox.isNotEmpty) {
-      todoList = todoDataBase.loadTodos();
-    }
-  }
-
-  void onCheckBoxChanged(bool? newValue, int index) {
-    setState(() {
-      todoList[index].isCompleted = !todoList[index].isCompleted;
-      _myBox.putAt(index, todoList[index]);
-    });
-  }
-
   void saveNewTask() {
-    setState(() {
-      var newTask = TodoModel(title: _controller.text, isCompleted: false);
-      todoList.add(newTask);
-      todoDataBase.addTodo(newTask);
-    });
+    context.read<TodoCubit>().addTodo(_controller.text);
     _controller.clear();
     Navigator.pop(context);
   }
@@ -104,26 +82,26 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.only(
           top: 8,
         ),
-        child: ListView.builder(
-            itemCount: todoList.length,
-            itemBuilder: (context, index) {
-              return Dismissible(
-                key: Key(todoList[index].title),
-                direction: DismissDirection.endToStart,
-                onDismissed: (direction) {
-                  setState(() {
-                    todoList.removeAt(index);
-                    _myBox.deleteAt(index);
-                    todoList = todoDataBase.loadTodos();
-                  });
-                },
-                child: TodoTitle(
-                  title: todoList[index].title,
-                  taskCompleted: todoList[index].isCompleted,
-                  onChanged: (value) => onCheckBoxChanged(value, index),
-                ),
-              );
-            }),
+        child: BlocBuilder<TodoCubit, List<TodoModel>>(
+            builder: (context, todoList) {
+          return ListView.builder(
+              itemCount: todoList.length,
+              itemBuilder: (context, index) {
+                return Dismissible(
+                  key: Key(todoList[index].title),
+                  direction: DismissDirection.endToStart,
+                  onDismissed: (direction) {
+                    context.read<TodoCubit>().deleteTodo(index);
+                  },
+                  child: TodoTitle(
+                    title: todoList[index].title,
+                    taskCompleted: todoList[index].isCompleted,
+                    onChanged: (value) =>
+                        context.read<TodoCubit>().update(index),
+                  ),
+                );
+              });
+        }),
       ),
     );
   }
